@@ -1,0 +1,87 @@
+<!doctype html><html lang="az"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Linux terminal sınaq meydançası</title>
+<style>
+:root{--bg:#f4f1ea;--fg:#0f1720;--mut:#4a5560;--chip:#ffffff;--bd:#d9d4c7;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1720;--fg:#f4f1ea;--mut:#9fb3c8;--chip:#1c2733;--bd:#2b3a4a}}
+:root[data-theme="dark"]{--bg:#0f1720;--fg:#f4f1ea;--mut:#9fb3c8;--chip:#1c2733;--bd:#2b3a4a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 Arial,sans-serif}
+#app{max-width:820px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0}
+.sub{color:var(--mut);font-size:14px;margin:4px 0 12px}
+#term{background:#0b1118;color:#d6e2ee;border-radius:14px;padding:14px;font:15px/1.45 "Courier New",monospace;height:52vh;overflow-y:auto}
+#out{white-space:pre-wrap;word-break:break-word}
+.p{color:#3ddc84}.r{color:#ff6b6b}.m{color:#7f93a8}
+#line{display:flex;gap:6px;align-items:center}
+#pr{color:#3ddc84;white-space:pre}
+#in{flex:1;min-width:0;background:none;border:0;outline:0;color:#f4f1ea;font:inherit;caret-color:#3ddc84}
+#chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+button{font:14px "Courier New",monospace;background:var(--chip);color:var(--fg);border:1px solid var(--bd);border-radius:999px;padding:8px 12px}
+</style></head><body><div id="app">
+<h1>Linux terminal sınaq meydançası</h1>
+<p class="sub">Qeydiyyat yoxdur. Bu, simulyasiyadır: real sistemə təsir etmir, istədiyin qədər sına. Düymələrə toxun və ya özün yaz.</p>
+<div id="term"><div id="out"></div><div id="line"><span id="pr"></span><input id="in" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></div></div>
+<div id="chips"></div><button id="reset">Sıfırla</button>
+</div>
+<script>
+const U={tryhackme:"tryhackme",user2:"user2",root:"toor"},H={tryhackme:"/home/tryhackme",user2:"/home/user2",root:"/root"};
+const F=(d,m="rw-r--r--",o="tryhackme")=>({t:"f",d,m,o}),D=(c={},m="rwxr-xr-x",o="tryhackme")=>({t:"d",c,m,o});
+const fresh=()=>D({home:D({tryhackme:D({"notes.txt":F("Salam! Bu notes.txt faylıdır.\n"),"script.sh":F("#!/bin/bash\necho Skript işlədi\n"),".secret":F("gizli fayl\n"),Desktop:D(),proje:D({"a.txt":F("")})}),user2:D({"msg.txt":F("Salam, mən user2-yəm\n","rw-r--r--","user2")},"rwxr-xr-x","user2")},"rwxr-xr-x","root"),etc:D({passwd:F("root:x:0:0:root:/root:/bin/bash\ntryhackme:x:1000:1000::/home/tryhackme:/bin/bash\nuser2:x:1001:1001::/home/user2:/bin/bash\n","rw-r--r--","root"),shadow:F("root:$6$hash...\n","rw-r-----","root")},"rwxr-xr-x","root"),var:D({log:D({syslog:F("Oct 24 sistem başladı\n","rw-r--r--","root")},"rwxr-xr-x","root")},"rwxr-xr-x","root"),tmp:D({},"rwxrwxrwx","root"),root:D({"flag.txt":F("THM{root_oldun}\n","rw-------","root")},"rwx------","root")},"rwxr-xr-x","root");
+const out=document.getElementById("out"),inp=document.getElementById("in"),pr=document.getElementById("pr"),term=document.getElementById("term");
+let fs,user,cwd,stack,pend,hist=[],hi=0;
+const norm=p=>{const s=[];for(const x of p.split("/")){if(!x||x==".")continue;if(x=="..")s.pop();else s.push(x)}return"/"+s.join("/")};
+const res=p=>norm(p[0]=="~"?H[user]+p.slice(1):p[0]=="/"?p:cwd+"/"+p);
+const get=p=>{let n=fs;for(const x of p.split("/").filter(Boolean)){if(n.t!="d"||!n.c[x])return null;n=n.c[x]}return n};
+const par=p=>{const i=p.lastIndexOf("/");return[get(i?p.slice(0,i):"/"),p.slice(i+1)]};
+const can=(n,b)=>user=="root"||n.m[(n.o==user?0:6)+"rwx".indexOf(b)]!="-";
+const sh=()=>cwd==H[user]?"~":cwd.startsWith(H[user]+"/")?"~"+cwd.slice(H[user].length):cwd;
+const prompt=()=>user+"@linux2:"+sh()+(user=="root"?"# ":"$ ");
+function add(t,c){if(t==="")return;const s=document.createElement("div");if(c)s.className=c;s.textContent=t;out.appendChild(s);term.scrollTop=term.scrollHeight}
+function echo(p,l){const d=document.createElement("div"),a=document.createElement("span");a.className=user=="root"?"r":"p";a.textContent=p;d.appendChild(a);d.appendChild(document.createTextNode(l));out.appendChild(d)}
+function setPr(){pr.textContent=pend?pend.label+" ":prompt();inp.type=pend?"password":"text"}
+function init(){fs=fresh();user="tryhackme";cwd=H.tryhackme;stack=[];pend=null;out.innerHTML="";add("Salam! Sən tryhackme istifadəçisisən (linux2 maşını).\nCəhd et: ls -a, cat notes.txt, ./script.sh, chmod +x script.sh, su - user2, sudo cat /etc/shadow\nParollar: user2 üçün user2, sudo üçün tryhackme. Kömək: help","m");setPr()}
+const HELPS={ls:"-a gizli faylları göstərir, -l ətraflı siyahı verir",rm:"-r qovluğu içindəkilərlə silir",cp:"-r qovluğu kopyalayır",mkdir:"-p iç-içə qovluq yaradır"};
+function run(l){const rd=/^(.*?)\s*(>>?)\s*(\S+)\s*$/.exec(l);if(rd&&rd[1].trim()){const o=run(rd[1]),x=rd[3],p=res(x),n=get(p);if(n&&n.t=="d")return"bash: "+x+": Is a directory";if(n){if(!can(n,"w"))return"bash: "+x+": Permission denied";n.d=(rd[2]==">>"?n.d:"")+o+"\n";return""}const[pn,nm]=par(p);if(!pn||pn.t!="d")return"bash: "+x+": No such file or directory";if(!can(pn,"w"))return"bash: "+x+": Permission denied";pn.c[nm]=F(o+"\n","rw-r--r--",user);return""}
+const a=l.trim().split(/\s+/).filter(Boolean);if(!a.length)return"";const c=a[0],r=a.slice(1);
+if(r.includes("--help"))return c+": "+(HELPS[c]||"istifadə: "+c+" [flaqlar] [fayl]");
+const fl=r.filter(x=>x[0]=="-"&&x.length>1),ps=r.filter(x=>x[0]!="-"||x=="-"),has=ch=>fl.some(x=>x.includes(ch));
+switch(c){
+case"help":return"Əmrlər: ls pwd cd mkdir touch cp mv rm cat file chmod whoami groups su sudo exit clear echo\nYazmaq: echo salam > fayl (üzərinə yazır), echo salam >> fayl (sonuna əlavə edir)\nFlaqlar: ls -a, ls -l, rm -r, mkdir -p, cp -r";
+case"man":return"Bu simulyatorda man yoxdur. Əmr --help yaz, məsələn: ls --help";
+case"clear":out.innerHTML="";return"";
+case"pwd":return cwd;
+case"whoami":return user;
+case"groups":return user+(user=="tryhackme"?" sudo":"");
+case"echo":return r.join(" ").replace(/["']/g,"");
+case"ssh":return"Bu simulyatorda yalnız lokal maşın var. Real SSH üçün TryHackMe maşınından istifadə et.";
+case"exit":if(stack.length){const s=stack.pop();user=s.user;cwd=s.cwd;return"logout"}return"Bu sessiyadan çıxmaq olmur (simulyator).";
+case"sudo":if(user=="root")return run(r.join(" "));if(user!="tryhackme")return user+" is not in the sudoers file.";if(!r.length)return"istifadə: sudo əmr";pend={t:"sudo",cmd:r,label:"[sudo] password for tryhackme:"};return"";
+case"su":{const t=ps.find(x=>x!="-")||"root";if(!U[t])return"su: user "+t+" does not exist";const dash=fl.length>0||ps.includes("-");if(user=="root"){stack.push({user,cwd});user=t;if(dash)cwd=H[t];return""}pend={t:"su",target:t,dash,label:"Password:"};return""}
+case"ls":{const p=ps[0]||".",n=get(res(p));if(!n)return"ls: cannot access "+p+": No such file or directory";let es;if(n.t=="f")es=[[p,n]];else{if(!can(n,"r"))return"ls: cannot open directory "+p+": Permission denied";es=Object.keys(n.c).sort().filter(k=>has("a")||k[0]!=".").map(k=>[k,n.c[k]]);if(has("a"))es=[[".",n],["..",n]].concat(es)}
+return has("l")?es.map(([k,v])=>(v.t=="d"?"d":"-")+v.m+" 1 "+v.o+" "+v.o+" "+String(v.t=="d"?4096:v.d.length).padStart(5)+" Oct 24 "+k).join("\n"):es.map(e=>e[0]).join("  ")}
+case"cd":{const p=res(r[0]||"~"),n=get(p);if(!n)return"cd: "+r[0]+": No such file or directory";if(n.t!="d")return"cd: "+r[0]+": Not a directory";if(!can(n,"x"))return"cd: "+r[0]+": Permission denied";cwd=p;return""}
+case"mkdir":{if(!ps.length)return"mkdir: missing operand";const o=[];for(const x of ps){const p=res(x);if(get(p)){o.push("mkdir: cannot create directory "+x+": File exists");continue}
+if(has("p")){let n=fs;for(const s of p.split("/").filter(Boolean)){if(!n.c[s])n.c[s]=D({},"rwxr-xr-x",user);n=n.c[s]}continue}
+const[pn,nm]=par(p);if(!pn||pn.t!="d"){o.push("mkdir: cannot create directory "+x+": No such file or directory");continue}if(!can(pn,"w")){o.push("mkdir: cannot create directory "+x+": Permission denied");continue}pn.c[nm]=D({},"rwxr-xr-x",user)}return o.join("\n")}
+case"touch":{if(!ps.length)return"touch: missing file operand";const o=[];for(const x of ps){const p=res(x);if(get(p))continue;const[pn,nm]=par(p);if(!pn||pn.t!="d"){o.push("touch: cannot touch "+x+": No such file or directory");continue}if(!can(pn,"w")){o.push("touch: cannot touch "+x+": Permission denied");continue}pn.c[nm]=F("","rw-r--r--",user)}return o.join("\n")}
+case"cp":case"mv":{if(ps.length<2)return c+": missing file operand";const sp=res(ps[0]),sn=get(sp);if(!sn)return c+": cannot stat "+ps[0]+": No such file or directory";if(sn.t=="d"&&c=="cp"&&!has("r"))return"cp: -r not specified; omitting directory "+ps[0];
+const dp=res(ps[1]),dn=get(dp);let pn,nm;if(dn&&dn.t=="d"){pn=dn;nm=sp.split("/").pop()}else[pn,nm]=par(dp);
+if(!pn||pn.t!="d")return c+": cannot create "+ps[1]+": No such file or directory";if(!can(pn,"w"))return c+": cannot create "+ps[1]+": Permission denied";
+const cl=JSON.parse(JSON.stringify(sn));if(c=="cp")cl.o=user;pn.c[nm]=cl;if(c=="mv"){const[sp2,sn2]=par(sp);if(sp2.c[sn2]===sn)delete sp2.c[sn2]}return""}
+case"rm":{if(!ps.length)return"rm: missing operand";const o=[];for(const x of ps){const p=res(x),n=get(p);if(p=="/"){o.push("rm: it is dangerous to operate recursively on /");continue}if(!n){if(!has("f"))o.push("rm: cannot remove "+x+": No such file or directory");continue}if(n.t=="d"&&!has("r")){o.push("rm: cannot remove "+x+": Is a directory");continue}const[pn,nm]=par(p);if(!can(pn,"w")){o.push("rm: cannot remove "+x+": Permission denied");continue}delete pn.c[nm]}return o.join("\n")}
+case"cat":{const o=[];for(const x of ps){const n=get(res(x));if(!n)o.push("cat: "+x+": No such file or directory");else if(n.t=="d")o.push("cat: "+x+": Is a directory");else if(!can(n,"r"))o.push("cat: "+x+": Permission denied");else o.push(n.d.replace(/\n$/,""))}return o.join("\n")}
+case"file":{const o=[];for(const x of ps){const n=get(res(x));o.push(!n?x+": cannot open (No such file or directory)":x+": "+(n.t=="d"?"directory":!n.d?"empty":n.d.startsWith("#!")?"Bourne-Again shell script, ASCII text executable":"ASCII text"))}return o.join("\n")}
+case"chmod":{const md=ps[0];if(ps.length<2)return"chmod: missing operand";const o=[];for(const x of ps.slice(1)){const n=get(res(x));if(!n){o.push("chmod: cannot access "+x+": No such file or directory");continue}if(user!="root"&&n.o!=user){o.push("chmod: changing permissions of "+x+": Operation not permitted");continue}
+if(/^[0-7]{3}$/.test(md))n.m=[...md].map(d=>[4,2,1].map((b,i)=>d&b?"rwx"[i]:"-").join("")).join("");
+else{const m=/^([ugoa]*)([+-])([rwx]+)$/.exec(md);if(!m)return"chmod: invalid mode: "+md;const w=m[1]||"a",a=n.m.split("");"ugo".split("").forEach((k,i)=>{if(w.includes("a")||w.includes(k))for(const ch of m[3])a[i*3+"rwx".indexOf(ch)]=m[2]=="+"?ch:"-"});n.m=a.join("")}}return o.join("\n")}
+default:if(c.includes("/")){const n=get(res(c));if(!n)return"bash: "+c+": No such file or directory";if(n.t=="d")return"bash: "+c+": Is a directory";if(!can(n,"x"))return"bash: "+c+": Permission denied";return n.d.split("\n").filter(x=>x.startsWith("echo ")).map(x=>x.slice(5)).join("\n")}return c+": command not found"}}
+function go(l){if(pend){const p=pend;pend=null;echo(p.label+" ","");const ok=l===U[p.t=="sudo"?"tryhackme":p.target];
+if(p.t=="sudo"){if(!ok)add("Sorry, try again.");else{const r=p.cmd;if(r[0]=="-i"||r[0]=="su"){stack.push({user,cwd});user="root";cwd="/root"}else if(r[0]=="-l")add("User tryhackme may run the following commands: (ALL : ALL) ALL");else{const u=user;user="root";add(run(r.join(" ")));user=u}}}
+else if(!ok)add("su: Authentication failure");else{stack.push({user,cwd});user=p.target;if(p.dash)cwd=H[user]}}
+else{echo(prompt(),l);if(l.trim()){hist.push(l);hi=hist.length}add(run(l))}
+setPr();term.scrollTop=term.scrollHeight}
+inp.addEventListener("keydown",e=>{if(e.key=="Enter"){const v=inp.value;inp.value="";go(v)}else if(e.key=="ArrowUp"&&hist.length){hi=Math.max(0,hi-1);inp.value=hist[hi];e.preventDefault()}else if(e.key=="ArrowDown"){hi=Math.min(hist.length,hi+1);inp.value=hist[hi]||""}});
+term.addEventListener("click",()=>inp.focus());
+document.getElementById("reset").onclick=init;
+["help","ls","ls -a","ls -l","pwd","whoami","cat notes.txt","mkdir test","touch yeni.txt","echo salam > yeni.txt","cat yeni.txt","./script.sh","chmod +x script.sh","su - user2"].forEach(t=>{const b=document.createElement("button");b.textContent=t;b.onclick=()=>go(t);document.getElementById("chips").appendChild(b)});
+init();
+</script></body></html>
